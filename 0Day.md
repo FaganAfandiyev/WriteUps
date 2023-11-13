@@ -1,6 +1,9 @@
-#Title: 0Day\n
+#Title: 0Day
+
 #Difficulty: Medium
+
 #Type: Kernel Exploit
+
 #By Fagan Afandiyev.
 
 ```shell
