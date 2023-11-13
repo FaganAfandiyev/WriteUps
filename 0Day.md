@@ -1,4 +1,4 @@
-#Title: 0Day
+#Title: 0Day\n
 #Difficulty: Medium
 #Type: Kernel Exploit
 #By Fagan Afandiyev.
