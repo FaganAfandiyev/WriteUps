@@ -1,7 +1,0 @@
-#Title: Signature leaks
-#Difficulty: Easy
-#Type: OSINT
-
-This is the new challenges description. `Jonathan tends to leak information in his email replies.` We can find his email from this X account. jonathanwitherson@gmail.com
-Let's try to send him a message. He has his auto-reply on with some sensitive information such as the flag: `HTB{yoUr_em41l_maY_p0s3_4_r1sK}`.
-
