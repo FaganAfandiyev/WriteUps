@@ -1,0 +1,95 @@
+#Title: Uncoding
+#Difficulty: Easy
+#Type: Reverse engineering
+
+We have a file named `uncoding`. Lets start investigation. 
+
+```shell
+$ file uncoding 
+uncoding: ELF 64-bit LSB pie executable, x86-64,
+```
+```bash
+└─$ checksec --file=uncoding           
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH  Symbols   FORTIFY Fortified Fortifiable FILE
+Partial RELRO   No canary found   NX enabled    PIE enabled     No RPATH   No RUNPATH   72 Symbols    No  0   2   uncoding
+```
+
+We see that NX is enabled but there is no CANARY. That is good. We need to disassemble this. For that I will use GHidra.
+
+When we check the functions from Symbol Tree at the left of the screen, we can see couple important functions named main and decrypt_messages.
+Checking the Decompiled version to understand the code. 
+
+```c
+void main(void)
+
+{
+  ushort **ppuVar1;
+  char local_28 [28];
+  int local_c;
+  
+  do {
+    printf("Which memory would you like to review today (0 -> 3)? ");
+    fgets(local_28,0x10,stdin);
+    ppuVar1 = __ctype_b_loc();
+    if (((*ppuVar1)[local_28[0]] & 0x800) == 0) {
+      local_c = -1;
+    }
+    else {
+      local_c = atoi(local_28);
+    }
+    decrypt_message(local_c);
+  } while( true );
+}
+```
+
+```c
+
+void decrypt_message(int param_1)
+
+{
+  undefined8 local_28;
+  undefined8 local_20;
+  long local_18;
+  int local_c;
+  
+  if (param_1 == 3) {
+    puts("-- ERROR -- [That memory has been locked away!] -- ERROR --");
+  }
+  else if ((param_1 < 4) && (-1 < param_1)) {
+    local_18 = *(long *)(messages + (long)param_1 * 8);
+    local_28 = 0xc3e2af1e8edad4c6;
+    local_20 = 0xee602548c0d4060c;
+    for (local_c = 0; *(char *)(local_18 + local_c) != '\0'; local_c = local_c + 1) {
+      putchar((int)(char)(*(byte *)((long)&local_28 + (long)(local_c % 0x10)) ^
+                         *(byte *)(local_18 + local_c)));
+    }
+    puts("");
+  }
+  else {
+    puts("-- ERROR -- [That memory does not exist] -- ERROR --");
+  }
+  return;
+}
+```
+
+From the first we see that main is just getting the input and sending it to second function. The for loop is the part where it gets and prints the string and it depends on the number you put in. So we need to make it work while we put 3 in. For that we can change if statement to different number than 3.
+
+```assembly
+
+        00101186 48 89 e5        MOV        RBP,RSP
+        00101189 48 83 ec 30     SUB        RSP,0x30
+        0010118d 89 7d dc        MOV        dword ptr [RBP + local_2c],EDI
+        00101190 83 7d dc 03     CMP        dword ptr [RBP + local_2c],0x3
+        00101194 75 11           JNZ        LAB_001011a7
+```
+
+This is the if statement where it checks if your input is 3 and if it is then exits the code and prints that memory is locked. If we select 0x3 and right click and then click patch instructions, we can now change the code and make it 0x5 to check for 5 instead of 3. That way we can pass value 3 to the print algorithm. To export we can click to file>Export Program>Original File. Then to run it we need to give it permission.
+
+```bash
+chmod +x uncoding_patch
+./uncoding_patch
+Which memory would you like to review today (0 -> 3)? 3
+HTB{0n3_t1m3_p4d_tw0_t1m3_p4d_thr33_t1m3_p4d...}
+```
+
+
